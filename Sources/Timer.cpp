@@ -1,116 +1,131 @@
-#include "Timer.h"
-#include <algorithm> // For vector operations
+#include "../Headers/Timer.h"
+#include <algorithm> // For finding/removing items in vectors
 #include <iostream>
 
 using namespace std;
 
-// Initialize static members
+// Initialize the static variables defined in the Header
 bool Timer::isRunning = false;
+// Stores the exact time of the last "tick"
 chrono::high_resolution_clock::time_point Timer::previousTimePoint;
+
+// A waiting list for new timers that need to be added
 vector<callbackAndTimersTuple> Timer::methodsAndTimersToAdd;
+// The active list of timers currently running
 vector<callbackAndTimersTuple> Timer::callbackMethodsAndTimers;
 
-// Private method to start the timer
+// Private function to kickstart the clock
 void Timer::startTimer()
 {
+    // Get the current time right now
     previousTimePoint = chrono::high_resolution_clock::now();
     isRunning = true;
 }
 
-// Run all timers
+// THE MAIN LOOP: This is called constantly by the Game loop
 bool Timer::run()
 {
     using namespace chrono;
 
-    // If no timers, stop running
+    // If there are no timers active and no new ones waiting, do nothing
     if (methodsAndTimersToAdd.empty() && callbackMethodsAndTimers.empty())
     {
         isRunning = false;
         return isRunning;
     }
 
+    // If we have work to do but the clock is off, start it
     if (!isRunning)
         startTimer();
 
     if (isRunning)
     {
-        // Time elapsed since last tick in milliseconds
+        // Calculate how many milliseconds passed since the last frame
         auto msSpan = duration_cast<milliseconds>(high_resolution_clock::now() - previousTimePoint);
 
+        // If at least 1 millisecond has passed...
         if (msSpan.count() >= 1)
         {
+            // Reset the clock for the next tick
             previousTimePoint = high_resolution_clock::now();
 
-            // Update all active timers
+            // Check every active timer
             for (auto& tuple : callbackMethodsAndTimers)
             {
-                long& currentCounter = get<2>(tuple);
-                bool& markedForDeletion = get<4>(tuple);
+                // Get the current countdown value (by reference)
+                long& currentCounter = get(tuple);
+                bool& markedForDeletion = get(tuple);
 
+                // If this timer is dead or hasn't reached 0 yet, skip it
                 if (markedForDeletion || --currentCounter > 0)
                     continue;
 
-                void* ownerObject = get<0>(tuple);
-                void (*methodPtr)(void*) = get<1>(tuple);
-                long& originalCounter = get<3>(tuple);
+                // TIME'S UP! Get the function pointer and object
+                void* ownerObject = get(tuple);
+                void (*methodPtr)(void*) = get(tuple);
+                long& originalCounter = get(tuple);
 
-                // Call the method
+                // Call the function (e.g., move the snake!)
                 methodPtr(ownerObject);
 
-                // Reset counter
+                // Reset the countdown so it happens again (Looping timer)
                 currentCounter = originalCounter;
             }
         }
 
-        // Remove timers marked for deletion
+        // CLEANUP: Remove timers that were marked for deletion
         for (size_t idx = callbackMethodsAndTimers.size(); idx > 0; idx--)
         {
-            if (get<4>(callbackMethodsAndTimers[idx - 1]))
+            // If marked as true (delete me)...
+            if (get(callbackMethodsAndTimers[idx - 1]))
+                // Remove it from the vector
                 callbackMethodsAndTimers.erase(callbackMethodsAndTimers.begin() + (idx - 1));
         }
 
-        // Add new timers
+        // ADD NEW: Move waiting timers into the active list
         for (auto& tuple : methodsAndTimersToAdd)
             callbackMethodsAndTimers.push_back(tuple);
-        methodsAndTimersToAdd.clear();
+            
+        methodsAndTimersToAdd.clear(); // Clear the waiting list
     }
 
     return isRunning;
 }
 
-// Add or update a timer
+// Function to register a new task (e.g., "Snake, Move, every 200ms")
 void Timer::setTimerAndCallback(long timerInMilliSeconds, void* ownerObject, void(*methodPtr)(void* ownerObject))
 {
-    // Update existing timer if present
+    // First, check if this timer already exists. If so, just update its time.
     for (auto& tuple : callbackMethodsAndTimers)
     {
-        if (get<0>(tuple) == ownerObject && get<1>(tuple) == methodPtr)
+        if (get(tuple) == ownerObject && get(tuple) == methodPtr)
         {
-            get<3>(tuple) = timerInMilliSeconds;
-            get<4>(tuple) = false;
+            get(tuple) = timerInMilliSeconds; // Update duration
+            get(tuple) = false;               // Un-delete it if it was marked
             return;
         }
     }
 
-    // Add new timer
+    // If it's new, add it to the waiting list
     if (methodPtr != nullptr)
         methodsAndTimersToAdd.push_back(make_tuple(ownerObject, methodPtr, timerInMilliSeconds, timerInMilliSeconds, false));
 }
 
-// Mark a timer for deletion
+// Function to stop a task (e.g., "Stop blinking the text")
 void Timer::markTimerForDeletion(void* ownerObject, void(*methodPtr)(void* ownerObject))
 {
+    // Find the timer and mark the boolean flag as 'true'
     for (auto& tuple : callbackMethodsAndTimers)
     {
-        if (get<0>(tuple) == ownerObject && get<1>(tuple) == methodPtr)
+        if (get(tuple) == ownerObject && get(tuple) == methodPtr)
         {
-            get<4>(tuple) = true;
+            get(tuple) = true; // Mark for deletion
             return;
         }
     }
 }
 
-// Clear all timers
+// Stop everything (used when Game Over or resetting)
 void Timer::clearAll()
 {
     methodsAndTimersToAdd.clear();
