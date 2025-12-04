@@ -6,6 +6,7 @@
 #include "Point.h"
 #include "UI.h"
 
+// Mac-Compatible Colors
 enum class ConsoleColor { Black, Red, Green, Yellow, Blue, Magenta, Cyan, White, BrightBlack, BrightRed, BrightGreen, BrightYellow, BrightBlue, BrightMagenta, BrightCyan, BrightWhite };
 
 enum class GameStates { TitleScreen, WaitOption, GamePlay, Quit };
@@ -31,13 +32,13 @@ private:
     TitleScreen             ptrTitleScreen;
     Stage* ptrStage;
     GameStates              gameStates;
-    static unsigned short   lastHiScorePoints;
 
-    // These functions handle the window setup
     void setupConsoleWindow();
     void prepareToCloseWindow();
 
 public:
+    // MOVED TO PUBLIC FOR UI ACCESS
+    static unsigned short   lastHiScorePoints; 
     static const Point      StartScreenPoint;
     static const Point      EndScreenPoint;
 
@@ -45,7 +46,6 @@ public:
     ~Game();
     int run();
     
-    // Static helper functions
     static void setCursorPosition(int x, int y);
     static void setCursorPosition(const Point& cursorCoordinate);
     static char getCursorPositionData(const Point& cursorCoordinate);

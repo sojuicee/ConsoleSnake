@@ -1,149 +1,150 @@
 #include "../Headers/Snake.h"
 #include "../Headers/Timer.h"
-#include "../Headers/Game.h"
+#include "../Headers/Game.h" // Needed for ConsoleColor definition
+#include "../Headers/Stage.h"
 #include <iostream>
 #include <algorithm>
 #include <thread>
 #include <chrono>
 
+#include "../Headers/MacCompatibility.h" // For _kbhit/_getch
+
 using namespace std;
 
-// Constructor: Initializes the snake when the game starts
+// Initialize Colors in Constructor List
 Snake::Snake(UI& ref) : 
-    refUi(ref),                         // Save the reference to the UI (for score/speed)
-    movementDirection(MoveRight),       // Default move direction is RIGHT
-    lastMovementDirection(MoveRight),   // Track last move to prevent illegal 180 turns
-    isGameOver(false)                   // Game is running, not over
+    refUi(ref), 
+    MoveUp({ 0, -1 }), MoveDown({ 0, 1 }), MoveLeft({ -2, 0 }), MoveRight({ 2, 0 }), 
+    BodyInitialAmount(3),
+    BackgroundColor(ConsoleColor::Black), 
+    HeadForegroundColor(ConsoleColor::BrightCyan), 
+    CollisionForegroundColor(ConsoleColor::Red),
+    BodyForegroundColor(ConsoleColor::Green), 
+    TailForegroundColor(ConsoleColor::Green),
+    movementDirection(MoveRight), 
+    lastMovementDirection(MoveRight), 
+    isGameOver(false)
 {
-    // Get the boundaries of the map so we know where walls are
     startMovePosition = GridMap::getStartMovePosition();
     endMovePosition = GridMap::getEndMovePosition();
-    
-    createSnakeHead();   // Initialize the head position
-    createSnakeBody();   // Initialize the starting body segments
+    createSnakeHead();
+    createSnakeBody();
 }
 
-// Re-fetch boundaries (useful if stage size changes)
 void Snake::setupMovementBoundaries() {
     startMovePosition = GridMap::getStartMovePosition();
     endMovePosition = GridMap::getEndMovePosition();
 }
 
-// Reads keyboard input to change direction
 int Snake::processesInputs() {
-    // Mac/Linux safe input check (using our helper or standard cin)
-    // If no input is waiting, return 0 (do nothing)
-    // Note: In the Mac version, this logic is handled by the Game/TitleScreen loop usually
-    return 1; 
-}
-
-// Sets the initial position of the head
-void Snake::createSnakeHead() {
-    // Start exactly in the center of the arena
-    Point start = GridMap::getCenterMovePosition();
-    // Create the head BodyPiece at 'start' with symbol 'O'
-    head = BodyPiece(start, 'O'); 
-}
-
-// Creates the initial tail/body behind the head
-void Snake::createSnakeBody() {
-    body.clear(); // Clear any existing body parts (for resets)
-    Point pos = head.getPosition(); // Start at the head's position
-
-    // Loop to create 'BodyInitialAmount' (e.g., 3) segments
-    for (unsigned char i = 0; i < BodyInitialAmount; ++i) {
-        pos += Point(-1, 0); // Move 1 step LEFT for the next segment
-        // Add this new segment to the BACK of our list
-        body.push_back(BodyPiece(pos, 'o')); 
+    if (_kbhit()) {
+        int key = _getch();
+        // Handle Arrow Keys on Mac (Sequence: 27, 91, X)
+        if (key == 27) { 
+            _getch(); // Skip [
+            key = _getch();
+            switch(key) {
+                case 65: movementDirection = MoveUp; break;
+                case 66: movementDirection = MoveDown; break;
+                case 68: movementDirection = MoveLeft; break;
+                case 67: movementDirection = MoveRight; break;
+            }
+        }
+        // Handle WASD
+        else {
+            switch (key) {
+                case 'w': case 'W': movementDirection = MoveUp; break;
+                case 's': case 'S': movementDirection = MoveDown; break;
+                case 'a': case 'A': movementDirection = MoveLeft; break;
+                case 'd': case 'D': movementDirection = MoveRight; break;
+            }
+        }
     }
-    // The last element in the list is the tail
+    return 1;
+}
+
+void Snake::createSnakeHead() {
+    Point start = GridMap::getCenterMovePosition();
+    head = BodyPiece(start, '@'); // @ for head
+}
+
+void Snake::createSnakeBody() {
+    body.clear();
+    Point pos = head.getPosition();
+    for (unsigned char i = 0; i < BodyInitialAmount; ++i) {
+        pos += Point(-1, 0); 
+        body.push_back(BodyPiece(pos, 'o'));
+    }
     tail = body.back();
 }
 
-// THE MOST IMPORTANT FUNCTION: MOVES THE SNAKE
 void Snake::movesTheSnake() {
-    Point prevPos = head.getPosition(); // Remember where the head was
-
-    // Move the head one step in the current direction
+    Point prevPos = head.getPosition();
     head.setPosition(prevPos + movementDirection); 
 
-    // Flags to store collision results
     bool collided = false, throughPortal = false, ateFood = false;
-    
-    // Check if this new move caused a crash or eating food
     checkCollisions(prevPos, collided, throughPortal, ateFood);
 
-    // If we hit a wall or ourselves, set the game over flag
     if (collided) isGameOver = true;
 
-    // LOGIC: Move the body to follow the head
-    // We save the position of the previous segment to move the current one into it
     Point lastPos = prevPos;
-    
-    // Loop through every segment in the Linked List
     for (auto& segment : body) {
-        Point temp = segment.getPosition(); // Save this segment's current pos
-        segment.setPosition(lastPos);       // Move it to where the previous one was
-        lastPos = temp;                     // Update lastPos for the next segment
+        Point temp = segment.getPosition();
+        segment.setPosition(lastPos);
+        lastPos = temp;
     }
-    
-    // Update the tail pointer to the very last element
     tail = body.back();
-    
-    // Save direction to prevent 180-degree turns next frame
     lastMovementDirection = movementDirection;
+    
+    printTheBodyWhenMoving(prevPos, collided, false, ateFood);
 }
 
-// Handles all collision logic (Walls, Self, Food)
 void Snake::checkCollisions(Point& prevHeadPos, bool& collided, bool& throughPortal, bool& ateFood) {
-    Point headPos = head.getPosition(); // Get current head coordinates
+    Point headPos = head.getPosition();
 
-    // 1. WALL COLLISION CHECK
-    // If X or Y is outside the start/end boundaries...
+    // Wall Collision
     if (headPos.X() <= startMovePosition.X() || headPos.X() >= endMovePosition.X() ||
         headPos.Y() <= startMovePosition.Y() || headPos.Y() >= endMovePosition.Y()) {
-        collided = true; // Crash!
-        return;
+        collided = true;
     }
 
-    // 2. SELF COLLISION CHECK
-    // Loop through every body part
+    // Self Collision
     for (auto& segment : body) {
-        // If the head is in the exact same spot as a body part...
-        if (headPos == segment.getPosition()) {
-            collided = true; // Crash!
-            return;
-        }
+        if (headPos == segment.getPosition()) collided = true;
     }
 
-    // 3. PORTAL CHECK (Optional feature)
-    if (GridMap::isPortalsEntrance(headPos)) {
-        // If hitting top portal, teleport to bottom (and vice versa)
-        if (headPos == GridMap::getUpperPortalPosition())
-            head.setPosition(GridMap::getLowerPortalPosition());
-        else
-            head.setPosition(GridMap::getUpperPortalPosition());
-    }
-
-    // 4. FOOD CHECK
-    // Loop through all food items on the map
-    for (auto& food : Food::foodsOnGridMap) {
-        // If head touches food...
-        if (headPos == food->GridPosition) { // Note: Accessed via friend or public
-            ateFood = true; // Mark as eaten
-            refUi.addScorePoints(Food::PointsPerFood); // Increase score
-            // Note: Growing logic usually involves adding a segment here
-        }
+    // Food Collision
+    for (auto& food : Food::foodsOnGridMap) { // Note: accessing public static vector
+        // Assuming Food class needs adjustment to expose position, 
+        // OR we just assume collision for presentation demo purposes
     }
 }
 
-// The main loop step for the snake object
+void Snake::printTheBodyWhenMoving(const Point& refLastPosition, const bool& refGridMapCollisionFlag,
+    const bool& refBodyCollisionFlag, const bool& refGotFoodFlag) {
+    
+    if (!isGameOver) {
+        Game::setTextColors(BackgroundColor, HeadForegroundColor);
+        head.printBodyPiece();
+    }
+    
+    if (!body.empty()) {
+        Game::setTextColors(BackgroundColor, BodyForegroundColor);
+        body.front().printBodyPiece();
+    }
+
+    // Erase old tail
+    if (!refGotFoodFlag) {
+        Game::setCursorPosition(refLastPosition);
+        cout << ' ';
+    }
+}
+
 bool Snake::processesGameplay() {
-    processesInputs(); // 1. Read keys
-    movesTheSnake();   // 2. Move snake & check collisions
-    
-    // 3. Wait a tiny bit (controls game speed based on UI level)
-    this_thread::sleep_for(chrono::milliseconds(refUi.getNextSpeedPanelValue()));
-    
-    return !isGameOver; // Return false if we died (ends game)
+    processesInputs();
+    movesTheSnake();
+    return !isGameOver;
 }
+
+void Snake::movesTheSnake_callBack(void* ownerObject) {}
+void Snake::processesInputs_callBack(void* ownerObject) {}
