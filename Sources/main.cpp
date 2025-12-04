@@ -1,7 +1,8 @@
-// /Users/vanex/ConsoleSnake/Sources/main.cpp
 #include <iostream>
+#include "Headers/Game.h"
 
-int main() {
-    std::cout << "hello world\n";
-    return 0;
+int main()
+{
+    Game game;
+    return game.run();
 }
