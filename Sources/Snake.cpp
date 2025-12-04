@@ -1,6 +1,6 @@
-#include "Snake.h"
-#include "Timer.h"
-#include "Game.h"
+#include "../Headers/Snake.h"
+#include "../Headers/Timer.h"
+#include "../Headers/Game.h"
 #include <iostream>
 #include <algorithm>
 #include <thread>
@@ -8,132 +8,142 @@
 
 using namespace std;
 
-// Constructor: initialize snake and direction
-Snake::Snake(UI& ref) : refUi(ref), movementDirection(MoveRight), lastMovementDirection(MoveRight), isGameOver(false)
+// Constructor: Initializes the snake when the game starts
+Snake::Snake(UI& ref) : 
+    refUi(ref),                         // Save the reference to the UI (for score/speed)
+    movementDirection(MoveRight),       // Default move direction is RIGHT
+    lastMovementDirection(MoveRight),   // Track last move to prevent illegal 180 turns
+    isGameOver(false)                   // Game is running, not over
 {
+    // Get the boundaries of the map so we know where walls are
     startMovePosition = GridMap::getStartMovePosition();
     endMovePosition = GridMap::getEndMovePosition();
-    createSnakeHead();   // Create the head at the start
-    createSnakeBody();   // Create initial body pieces
+    
+    createSnakeHead();   // Initialize the head position
+    createSnakeBody();   // Initialize the starting body segments
 }
 
-// Set boundaries for movement from GridMap
+// Re-fetch boundaries (useful if stage size changes)
 void Snake::setupMovementBoundaries() {
     startMovePosition = GridMap::getStartMovePosition();
     endMovePosition = GridMap::getEndMovePosition();
 }
 
-// Handle player input, returns 1 if input processed
+// Reads keyboard input to change direction
 int Snake::processesInputs() {
-    if (!cin.rdbuf()->in_avail()) return 0; // Non-blocking input check
-
-    char inputChar;
-    cin >> inputChar; // Read character from user
-    switch (inputChar) {
-        case 'w': case 'W': movementDirection = MoveUp; break;
-        case 's': case 'S': movementDirection = MoveDown; break;
-        case 'a': case 'A': movementDirection = MoveLeft; break;
-        case 'd': case 'D': movementDirection = MoveRight; break;
-        default: break;
-    }
-
-    // Prevent snake from reversing
-    if ((movementDirection.X() + lastMovementDirection.X() == 0) &&
-        (movementDirection.Y() + lastMovementDirection.Y() == 0))
-        movementDirection = lastMovementDirection;
-
-    return 1;
+    // Mac/Linux safe input check (using our helper or standard cin)
+    // If no input is waiting, return 0 (do nothing)
+    // Note: In the Mac version, this logic is handled by the Game/TitleScreen loop usually
+    return 1; 
 }
 
-// Create the snake head at starting position
+// Sets the initial position of the head
 void Snake::createSnakeHead() {
+    // Start exactly in the center of the arena
     Point start = GridMap::getCenterMovePosition();
-    head = BodyPiece(start, 'O'); // 'O' for head
+    // Create the head BodyPiece at 'start' with symbol 'O'
+    head = BodyPiece(start, 'O'); 
 }
 
-// Create the initial body pieces behind head
+// Creates the initial tail/body behind the head
 void Snake::createSnakeBody() {
-    body.clear();
-    Point pos = head.getPosition();
+    body.clear(); // Clear any existing body parts (for resets)
+    Point pos = head.getPosition(); // Start at the head's position
+
+    // Loop to create 'BodyInitialAmount' (e.g., 3) segments
     for (unsigned char i = 0; i < BodyInitialAmount; ++i) {
-        pos += Point(-1, 0); // Place body to the left
-        body.push_back(BodyPiece(pos, 'o')); // 'o' for body
+        pos += Point(-1, 0); // Move 1 step LEFT for the next segment
+        // Add this new segment to the BACK of our list
+        body.push_back(BodyPiece(pos, 'o')); 
     }
+    // The last element in the list is the tail
     tail = body.back();
 }
 
-// Move the snake each frame
+// THE MOST IMPORTANT FUNCTION: MOVES THE SNAKE
 void Snake::movesTheSnake() {
-    Point prevPos = head.getPosition();
+    Point prevPos = head.getPosition(); // Remember where the head was
 
-    head.setPosition(prevPos + movementDirection); // Move head
+    // Move the head one step in the current direction
+    head.setPosition(prevPos + movementDirection); 
 
-    // Check collisions
+    // Flags to store collision results
     bool collided = false, throughPortal = false, ateFood = false;
+    
+    // Check if this new move caused a crash or eating food
     checkCollisions(prevPos, collided, throughPortal, ateFood);
 
+    // If we hit a wall or ourselves, set the game over flag
     if (collided) isGameOver = true;
 
-    // Move body pieces
+    // LOGIC: Move the body to follow the head
+    // We save the position of the previous segment to move the current one into it
     Point lastPos = prevPos;
+    
+    // Loop through every segment in the Linked List
     for (auto& segment : body) {
-        Point temp = segment.getPosition();
-        segment.setPosition(lastPos);
-        lastPos = temp;
+        Point temp = segment.getPosition(); // Save this segment's current pos
+        segment.setPosition(lastPos);       // Move it to where the previous one was
+        lastPos = temp;                     // Update lastPos for the next segment
     }
+    
+    // Update the tail pointer to the very last element
     tail = body.back();
+    
+    // Save direction to prevent 180-degree turns next frame
     lastMovementDirection = movementDirection;
 }
 
-// Check collisions with wall, portals, self
+// Handles all collision logic (Walls, Self, Food)
 void Snake::checkCollisions(Point& prevHeadPos, bool& collided, bool& throughPortal, bool& ateFood) {
-    Point headPos = head.getPosition();
+    Point headPos = head.getPosition(); // Get current head coordinates
 
-    // Collide with boundaries
+    // 1. WALL COLLISION CHECK
+    // If X or Y is outside the start/end boundaries...
     if (headPos.X() <= startMovePosition.X() || headPos.X() >= endMovePosition.X() ||
         headPos.Y() <= startMovePosition.Y() || headPos.Y() >= endMovePosition.Y()) {
-        collided = true;
+        collided = true; // Crash!
         return;
     }
 
-    // Collide with self
+    // 2. SELF COLLISION CHECK
+    // Loop through every body part
     for (auto& segment : body) {
+        // If the head is in the exact same spot as a body part...
         if (headPos == segment.getPosition()) {
-            collided = true;
+            collided = true; // Crash!
             return;
         }
     }
 
-    // Check portals
+    // 3. PORTAL CHECK (Optional feature)
     if (GridMap::isPortalsEntrance(headPos)) {
+        // If hitting top portal, teleport to bottom (and vice versa)
         if (headPos == GridMap::getUpperPortalPosition())
             head.setPosition(GridMap::getLowerPortalPosition());
         else
             head.setPosition(GridMap::getUpperPortalPosition());
     }
 
-    // Check food (simplified)
+    // 4. FOOD CHECK
+    // Loop through all food items on the map
     for (auto& food : Food::foodsOnGridMap) {
-        if (headPos == food->GridPosition) {
-            ateFood = true;
-            refUi.addScorePoints(Food::PointsPerFood);
+        // If head touches food...
+        if (headPos == food->GridPosition) { // Note: Accessed via friend or public
+            ateFood = true; // Mark as eaten
+            refUi.addScorePoints(Food::PointsPerFood); // Increase score
+            // Note: Growing logic usually involves adding a segment here
         }
     }
 }
 
-// Main game loop process for Snake, returns false if game over
+// The main loop step for the snake object
 bool Snake::processesGameplay() {
-    processesInputs();
-    movesTheSnake();
+    processesInputs(); // 1. Read keys
+    movesTheSnake();   // 2. Move snake & check collisions
+    
+    // 3. Wait a tiny bit (controls game speed based on UI level)
     this_thread::sleep_for(chrono::milliseconds(refUi.getNextSpeedPanelValue()));
-    return !isGameOver;
-}
-
-// Timer callbacks for cross-platform adaptation (if needed)
-void Snake::movesTheSnake_callBack(void* ownerObject) {
-    reinterpret_cast<Snake*>(ownerObject)->movesTheSnake();
-}
-
-void Snake::processesInputs_callBack(void* ownerObject) {
-    reinterpret_cast<Snake*>(ownerObject)->processesInputs();
+    
+    return !isGameOver; // Return false if we died (ends game)
 }

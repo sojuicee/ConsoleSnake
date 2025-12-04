@@ -6,13 +6,10 @@
 #include "Point.h"
 #include "UI.h"
 
-// Enum for text colors
 enum class ConsoleColor { Black, Red, Green, Yellow, Blue, Magenta, Cyan, White, BrightBlack, BrightRed, BrightGreen, BrightYellow, BrightBlue, BrightMagenta, BrightCyan, BrightWhite };
 
-// Enum for game states
 enum class GameStates { TitleScreen, WaitOption, GamePlay, Quit };
 
-// Enum for key values
 enum class KeyValues {
     Enter       = 0x0D,
     ArrowUp     = 0x48,
@@ -21,7 +18,6 @@ enum class KeyValues {
     ArrowRight  = 0x4D
 };
 
-// Console dimensions
 #define CONSOLEWIDTH    114
 #define CONSOLEHEIGHT   33
 
@@ -32,35 +28,27 @@ enum class KeyValues {
 class Game
 {
 private:
-    TitleScreen ptrTitleScreen; // Title screen object
-    Stage* ptrStage;            // Stage object
-    GameStates gameStates;      // Current game state
+    TitleScreen             ptrTitleScreen;
+    Stage* ptrStage;
+    GameStates              gameStates;
+    static unsigned short   lastHiScorePoints;
 
-    static unsigned short lastHiScorePoints; // Global high score
-
-    // Internal helper functions
-    void setupConsoleWindow(); 
+    // These functions handle the window setup
+    void setupConsoleWindow();
     void prepareToCloseWindow();
 
 public:
-    static const Point StartScreenPoint; // Top-left point of screen
-    static const Point EndScreenPoint;   // Bottom-right point of screen
+    static const Point      StartScreenPoint;
+    static const Point      EndScreenPoint;
 
     Game();
     ~Game();
-
-    int run(); // Run the game
-
-    // Cross-platform cursor management
+    int run();
+    
+    // Static helper functions
     static void setCursorPosition(int x, int y);
     static void setCursorPosition(const Point& cursorCoordinate);
-
-    // Get character at position (for collision, etc.)
     static char getCursorPositionData(const Point& cursorCoordinate);
-
-    // Cross-platform text color
-    static void setTextColors(ConsoleColor foreground, ConsoleColor background);
-
-    // Reset colors to default
+    static void setTextColors(ConsoleColor backgroundColor, ConsoleColor foregroundColor);
     static void backToTitleScreenColors();
 };
