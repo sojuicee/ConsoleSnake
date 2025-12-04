@@ -1,15 +1,15 @@
 #include <iostream>
 #include <iomanip>
-#include "Stage.h"
-#include "Game.h"
-#include "UI.h"
-#include "GridMap.h"
+#include "../Headers/Stage.h" // Fixed include path
+#include "../Headers/Game.h"
+#include "../Headers/UI.h"
+#include "../Headers/GridMap.h"
 
 using namespace std;
 
-// Stage colors and border
-const ConsoleColor Stage::BackgroundColor = ConsoleColor::Gray;
-const ConsoleColor Stage::ForegroundColor = ConsoleColor::Purple;
+// FIXED: Changed Colors to match Game.h definitions
+const ConsoleColor Stage::BackgroundColor = ConsoleColor::White; // Was Gray
+const ConsoleColor Stage::ForegroundColor = ConsoleColor::Magenta; // Was Purple
 const char Stage::BorderCharacter = '|';
 
 // Constructor: initialize gridMap to nullptr

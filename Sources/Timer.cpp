@@ -33,13 +33,14 @@ bool Timer::run()
             previousTimePoint = high_resolution_clock::now();
 
             for (auto& tuple : callbackMethodsAndTimers) {
-                // IMPORTANT: Using std::get with Index
+                // FIX: Added  and  indices
                 long& currentCounter = get(tuple);
                 bool& markedForDeletion = get(tuple);
 
                 if (markedForDeletion || --currentCounter > 0)
                     continue;
 
+                // FIX: Added , ,  indices
                 void* ownerObject = get(tuple);
                 void (*methodPtr)(void*) = get(tuple);
                 long& originalCounter = get(tuple);
@@ -50,6 +51,7 @@ bool Timer::run()
         }
 
         for (size_t idx = callbackMethodsAndTimers.size(); idx > 0; idx--) {
+            // FIX: Added  index
             if (get(callbackMethodsAndTimers[idx - 1]))
                 callbackMethodsAndTimers.erase(callbackMethodsAndTimers.begin() + (idx - 1));
         }
@@ -64,7 +66,9 @@ bool Timer::run()
 void Timer::setTimerAndCallback(long timerInMilliSeconds, void* ownerObject, void(*methodPtr)(void* ownerObject))
 {
     for (auto& tuple : callbackMethodsAndTimers) {
+        // FIX: Added  and  indices
         if (get(tuple) == ownerObject && get(tuple) == methodPtr) {
+            get(tuple) = timerInMilliSeconds;
             get(tuple) = timerInMilliSeconds;
             get(tuple) = false;
             return;
@@ -77,6 +81,7 @@ void Timer::setTimerAndCallback(long timerInMilliSeconds, void* ownerObject, voi
 void Timer::markTimerForDeletion(void* ownerObject, void(*methodPtr)(void* ownerObject))
 {
     for (auto& tuple : callbackMethodsAndTimers) {
+        // FIX: Added  and  indices
         if (get(tuple) == ownerObject && get(tuple) == methodPtr) {
             get(tuple) = true;
             return;

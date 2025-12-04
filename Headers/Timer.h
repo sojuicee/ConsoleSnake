@@ -4,6 +4,8 @@
 #include <vector>
 #include <tuple>
 
+using namespace std; // ADDED THIS LINE TO FIX ERRORS
+
 // Tuple structure for callback timers:
 // (owner object pointer, method pointer, current timer, original timer, marked for deletion)
 using callbackAndTimersTuple = tuple<void*, void(*)(void*), long, long, bool>;
